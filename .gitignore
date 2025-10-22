@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Model training outputs (if you retrain)
+*.h5
+*.hdf5
+logs/
+checkpoints/
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# Test files
+test_*.py
+*_test.py
+
+# Keep the trained model
+!MyModel.keras
