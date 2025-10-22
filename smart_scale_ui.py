@@ -32,6 +32,9 @@ class SmartScaleUI:
         self.root.geometry("1200x800")
         self.root.configure(bg='#1a1a2e')
         
+        # Fullscreen state
+        self.is_fullscreen = False
+        
         # Load model and labels
         self.load_model_and_labels()
         
@@ -45,8 +48,15 @@ class SmartScaleUI:
         # Create UI
         self.create_ui()
         
+        # Bind keyboard shortcuts
+        self.root.bind('<F11>', self.toggle_fullscreen)
+        self.root.bind('<Escape>', self.exit_fullscreen)
+        
         # Start camera preview
         self.start_camera_preview()
+        
+        # Apply fullscreen on startup
+        self.apply_fullscreen()
     
     def load_model_and_labels(self):
         """Load the trained model and labels"""
@@ -107,21 +117,33 @@ class SmartScaleUI:
         
         # Control section
         control_frame = tk.Frame(right_panel, bg='#16213e', relief='raised', bd=2)
-        control_frame.pack(fill='x', padx=15, pady=15)
+        control_frame.pack(fill='x', padx=15, pady=10)
         
         control_title = tk.Label(control_frame, text="⚡ Scale Control", 
-                                font=('Segoe UI', 14, 'bold'),
+                                font=('Segoe UI', 13, 'bold'),
                                 bg='#16213e', fg='#ffffff')
-        control_title.pack(pady=10)
+        control_title.pack(pady=8)
         
         self.scan_button = tk.Button(control_frame, text="▶ START SCALE", 
-                                     font=('Segoe UI', 16, 'bold'),
+                                     font=('Segoe UI', 14, 'bold'),
                                      bg='#00ff88', fg='#000000',
                                      activebackground='#00cc70',
-                                     relief='raised', bd=4,
-                                     height=2, cursor='hand2',
+                                     relief='raised', bd=3,
+                                     height=1, cursor='hand2',
                                      command=self.toggle_scanning)
-        self.scan_button.pack(pady=15, padx=20, fill='x')
+        self.scan_button.pack(pady=10, padx=20, fill='x')
+        
+        # Fullscreen toggle button - Visible in control section
+        self.fullscreen_button = tk.Button(control_frame, text="⛶ FULLSCREEN (F11)", 
+                                          font=('Segoe UI', 10, 'bold'),
+                                          bg='#0f3460', fg='#00ff88',
+                                          activebackground='#16213e',
+                                          activeforeground='#00ff88',
+                                          relief='raised', bd=2,
+                                          height=1,
+                                          cursor='hand2',
+                                          command=self.toggle_fullscreen)
+        self.fullscreen_button.pack(pady=5, padx=20, fill='x')
         
         # Progress bar
         self.progress = ttk.Progressbar(control_frame, mode='determinate', 
@@ -130,16 +152,16 @@ class SmartScaleUI:
         
         # Results section
         results_frame = tk.Frame(right_panel, bg='#16213e', relief='raised', bd=2)
-        results_frame.pack(fill='both', expand=True, padx=15, pady=15)
+        results_frame.pack(fill='both', expand=True, padx=15, pady=8)
         
         results_title = tk.Label(results_frame, text="📊 Scan Results", 
-                                font=('Segoe UI', 13, 'bold'),
+                                font=('Segoe UI', 12, 'bold'),
                                 bg='#16213e', fg='#ffffff')
-        results_title.pack(pady=8)
+        results_title.pack(pady=5)
         
         # Item display - COMPACT
         item_frame = tk.Frame(results_frame, bg='#0f3460', relief='sunken', bd=2)
-        item_frame.pack(fill='x', padx=12, pady=5)
+        item_frame.pack(fill='x', padx=10, pady=3)
         
         tk.Label(item_frame, text="Item:", font=('Segoe UI', 9),
                 bg='#0f3460', fg='#aaaaaa').pack(anchor='w', padx=8, pady=(3, 0))
@@ -151,7 +173,7 @@ class SmartScaleUI:
         
         # Weight display - COMPACT
         weight_frame = tk.Frame(results_frame, bg='#0f3460', relief='sunken', bd=2)
-        weight_frame.pack(fill='x', padx=12, pady=5)
+        weight_frame.pack(fill='x', padx=10, pady=3)
         
         tk.Label(weight_frame, text="Weight:", font=('Segoe UI', 9),
                 bg='#0f3460', fg='#aaaaaa').pack(anchor='w', padx=8, pady=(3, 0))
@@ -163,7 +185,7 @@ class SmartScaleUI:
         
         # Price display - COMPACT
         price_frame = tk.Frame(results_frame, bg='#0f3460', relief='sunken', bd=2)
-        price_frame.pack(fill='x', padx=12, pady=5)
+        price_frame.pack(fill='x', padx=10, pady=3)
         
         tk.Label(price_frame, text="Price/kg:", font=('Segoe UI', 9),
                 bg='#0f3460', fg='#aaaaaa').pack(anchor='w', padx=8, pady=(3, 0))
@@ -176,28 +198,32 @@ class SmartScaleUI:
                                     anchor='w', justify='left')
         self.price_label.pack(anchor='w', padx=8, pady=(0, 3))
         
-        # Total display (highlighted) - COMPACT to fit on screen
-        total_frame = tk.Frame(results_frame, bg='#ff6b35', relief='raised', bd=2)
-        total_frame.pack(fill='x', padx=12, pady=8)
+        # Total display (highlighted) - Properly sized
+        total_frame = tk.Frame(results_frame, bg='#ff6b35', relief='raised', bd=3)
+        total_frame.pack(fill='x', padx=10, pady=5)
+        
+        # Create inner frame for padding
+        total_inner = tk.Frame(total_frame, bg='#ff6b35')
+        total_inner.pack(fill='both', expand=True, padx=10, pady=10)
         
         # Use grid layout for better space control
-        tk.Label(total_frame, text="💰 TOTAL:", font=('Segoe UI', 10, 'bold'),
-                bg='#ff6b35', fg='#ffffff').grid(row=0, column=0, sticky='w', padx=8, pady=6)
+        tk.Label(total_inner, text="💰 TOTAL:", font=('Segoe UI', 11, 'bold'),
+                bg='#ff6b35', fg='#ffffff').grid(row=0, column=0, sticky='w', padx=(2, 15), pady=1)
         
         # Use StringVar for dynamic updates
         self.total_text = tk.StringVar(value="LKR 0.00")
-        self.total_label = tk.Label(total_frame, textvariable=self.total_text, 
+        self.total_label = tk.Label(total_inner, textvariable=self.total_text, 
                                     font=('Segoe UI', 18, 'bold'),
                                     bg='#ff6b35', fg='#ffffff',
                                     anchor='e', justify='right')
-        self.total_label.grid(row=0, column=1, sticky='e', padx=8, pady=6)
-        total_frame.grid_columnconfigure(1, weight=1)
+        self.total_label.grid(row=0, column=1, sticky='e', padx=(15, 2), pady=1)
+        total_inner.grid_columnconfigure(1, weight=1)
         
         # Footer
         footer = tk.Frame(self.root, bg='#16213e', height=40)
         footer.pack(fill='x', side='bottom')
         
-        footer_text = tk.Label(footer, text="Powered by AI Vision | Place item in frame and press START", 
+        footer_text = tk.Label(footer, text="Powered by AI Vision | Press F11 for Fullscreen | ESC to Exit",  
                               font=('Segoe UI', 10),
                               bg='#16213e', fg='#888888')
         footer_text.pack(pady=10)
@@ -279,11 +305,11 @@ class SmartScaleUI:
         self.status_label.config(text="● Scanning in progress...", fg='#ff6b35')
         self.progress['value'] = 0
         
-        # Clear previous results
+        # Clear previous results (use StringVar.set() for dynamic labels)
         self.item_label.config(text="—")
         self.weight_label.config(text="—")
-        self.price_label.config(text="—")
-        self.total_label.config(text="LKR 0.00")
+        self.price_text.set("—")
+        self.total_text.set("LKR 0.00")
         
         # Start scanning thread
         self.scan_thread = threading.Thread(target=self.scanning_process, daemon=True)
@@ -390,6 +416,26 @@ class SmartScaleUI:
         """Stop the scanning process"""
         self.is_scanning = False
         self.reset_scan_button()
+    
+    def apply_fullscreen(self):
+        """Apply fullscreen mode"""
+        self.is_fullscreen = True
+        self.root.attributes('-fullscreen', True)
+        self.root.state('zoomed')  # Maximize window
+    
+    def toggle_fullscreen(self, event=None):
+        """Toggle fullscreen mode (F11 key)"""
+        self.is_fullscreen = not self.is_fullscreen
+        self.root.attributes('-fullscreen', self.is_fullscreen)
+        if self.is_fullscreen:
+            self.root.state('zoomed')
+        return "break"
+    
+    def exit_fullscreen(self, event=None):
+        """Exit fullscreen mode (ESC key)"""
+        self.is_fullscreen = False
+        self.root.attributes('-fullscreen', False)
+        return "break"
     
     def on_closing(self):
         """Cleanup when closing the application"""
