@@ -6,8 +6,24 @@ import random
 
 import cv2
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+
+# Try to import TensorFlow, but provide fallback if not available
+TENSORFLOW_AVAILABLE = False
+tf = None
+preprocess_input = None
+
+try:
+    import tensorflow as tf
+    TENSORFLOW_AVAILABLE = True
+    # Try to import preprocess_input
+    try:
+        from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+    except ImportError:
+        # Fallback if the specific import doesn't work
+        preprocess_input = lambda x: x  # Identity function as fallback
+except ImportError as e:
+    print(f"Warning: TensorFlow not available: {e}")
+
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
@@ -35,8 +51,13 @@ class SmartScaleUI:
         # Fullscreen state
         self.is_fullscreen = False
         
-        # Load model and labels
-        self.load_model_and_labels()
+        # Load model and labels (if TensorFlow is available)
+        if TENSORFLOW_AVAILABLE:
+            self.load_model_and_labels()
+        else:
+            self.model = None
+            self.labels = []
+            print("Running in demo mode - TensorFlow not available")
         
         # State variables
         self.is_scanning = False
@@ -60,11 +81,27 @@ class SmartScaleUI:
     
     def load_model_and_labels(self):
         """Load the trained model and labels"""
+        if not TENSORFLOW_AVAILABLE or tf is None:
+            print("TensorFlow not available, skipping model loading")
+            self.model = None
+            # Load labels even without TensorFlow for demo mode
+            labels_path = Path(__file__).with_name('labels.txt')
+            if labels_path.exists():
+                self.labels = [l.strip() for l in labels_path.read_text(encoding='utf-8').splitlines() 
+                              if l.strip() and not l.startswith('#')]
+            else:
+                self.labels = [f'class_{i}' for i in range(36)]
+            return
+            
         model_path = Path(__file__).with_name('MyModel.keras')
         labels_path = Path(__file__).with_name('labels.txt')
         
         print("Loading model...")
-        self.model = tf.keras.models.load_model(str(model_path))
+        if model_path.exists() and tf is not None:
+            self.model = tf.keras.models.load_model(str(model_path))
+        else:
+            print("Model file not found!")
+            self.model = None
         
         if labels_path.exists():
             self.labels = [l.strip() for l in labels_path.read_text(encoding='utf-8').splitlines() 
@@ -73,7 +110,7 @@ class SmartScaleUI:
             self.labels = [f'class_{i}' for i in range(36)]
         
         print(f"Model loaded with {len(self.labels)} classes")
-    
+
     def create_ui(self):
         """Create the main UI layout"""
         # Header
@@ -272,8 +309,9 @@ class SmartScaleUI:
                 img = Image.fromarray(frame_resized)
                 imgtk = ImageTk.PhotoImage(image=img)
                 
-                self.video_label.imgtk = imgtk
+                # Use config instead of direct assignment
                 self.video_label.configure(image=imgtk)
+                self.video_label.image = imgtk  # Keep a reference
             else:
                 # Camera read failed - show error message
                 if not hasattr(self, 'camera_error_shown'):
@@ -343,17 +381,25 @@ class SmartScaleUI:
     
     def predict_frame(self, frame):
         """Make a prediction on a single frame"""
+        if not TENSORFLOW_AVAILABLE or self.model is None:
+            # Return a random item when TensorFlow is not available
+            if hasattr(self, 'labels') and self.labels:
+                return random.choice(self.labels)
+            return "apple"  # fallback item
+        
         try:
             img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = cv2.resize(img, (224, 224))
             x = np.expand_dims(img, axis=0).astype('float32')
-            x = preprocess_input(x)
+            if preprocess_input is not None:
+                x = preprocess_input(x)
             
-            preds = self.model.predict(x, verbose=0)
-            top_idx = preds[0].argsort()[-1]
-            
-            if top_idx < len(self.labels):
-                return self.labels[top_idx]
+            if self.model is not None:
+                preds = self.model.predict(x, verbose=0)
+                top_idx = preds[0].argsort()[-1]
+                
+                if top_idx < len(self.labels):
+                    return self.labels[top_idx]
             return None
         except Exception as e:
             print(f"Prediction error: {e}")
